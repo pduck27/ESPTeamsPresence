@@ -1,3 +1,7 @@
+// pduck27 Changes commented with xxx
+// TODO: Setup PIR Parameter in Web
+// TODO: Code Cleaning
+
 /**
  * ESPTeamsPresence -- A standalone Microsoft Teams presence light 
  *   based on ESP32 and RGB neopixel LEDs.
@@ -102,7 +106,7 @@ const char* rootCACertificateGraph = \
 // #define NUMLEDS 16  							// Number of LEDs on the strip (if not set via build flags)
 // #define DATAPIN 26							// GPIO pin used to drive the LED strip (20 == GPIO/D13) (if not set via build flags)
 // #define STATUS_PIN LED_BUILTIN				// User builtin LED for status (if not set via build flags)
-#define DEFAULT_POLLING_PRESENCE_INTERVAL "30"	// Default interval to poll for presence info (seconds)
+#define DEFAULT_POLLING_PRESENCE_INTERVAL "15" //xxx	// Default interval to poll for presence info (seconds)
 #define DEFAULT_ERROR_RETRY_INTERVAL 30			// Default interval to try again after errors
 #define TOKEN_REFRESH_TIMEOUT 60	 			// Number of seconds until expiration before token gets refreshed
 #define CONTEXT_FILE "/context.json"			// Filename of the context file
@@ -110,7 +114,6 @@ const char* rootCACertificateGraph = \
 
 #define DBG_PRINT(x) Serial.print(x)
 #define DBG_PRINTLN(x) Serial.println(x)
-
 
 
 // IotWebConf
@@ -179,6 +182,17 @@ uint8_t retries = 0;
 // Multicore
 TaskHandle_t TaskNeopixel; 
 
+
+//xxx START
+#define inputSensorPIR 14
+bool usePIR = true;
+int ledHighBrightness = 120;
+int ledLowBrightness = 1;
+int nextPIRCheck = 0;
+bool motionDetected = true;
+int motionDuration = 20000;
+bool detectedImportantActivity = true;
+//xxx STOP
 
 /**
  * Helper
@@ -287,6 +301,8 @@ void startMDNS() {
 // Neopixel control
 void setAnimation(uint8_t segment, uint8_t mode = FX_MODE_STATIC, uint32_t color = RED, uint16_t speed = 3000, bool reverse = false) {
 	uint16_t startLed, endLed = 0;
+
+	detectedImportantActivity = (mode > 0); //xxx
 
 	// Support only one segment for the moment
 	if (segment == 0) {
@@ -560,6 +576,40 @@ void statemachine() {
 	}
 }
 
+// xxx START
+void checkPIRstate() {	
+	if (! usePIR){
+		return;
+	}
+	
+	if (millis() > nextPIRCheck) {
+		long state = 0;
+
+		if (detectedImportantActivity) {
+			state = HIGH;
+			DBG_PRINTLN(F("Motion detection skipped cause of important activity."));
+		} else {
+			state = digitalRead(inputSensorPIR);
+		}
+		
+		if(state == HIGH && !(motionDetected)) {      
+			Serial.printf("New motion detected, increase brightness for %d s. \n", motionDuration);
+			ws2812fx.setBrightness(ledHighBrightness);
+			motionDetected = true;      
+			nextPIRCheck = millis() + motionDuration;
+		}
+		else if (state == LOW && motionDetected) {
+			DBG_PRINTLN(F("Motion is absent, brightness drecreased."));
+			ws2812fx.setBrightness(ledLowBrightness);    
+			motionDetected = false;			
+			nextPIRCheck = millis() + 1000;
+		}	else {
+			nextPIRCheck = millis() + 1000;
+		}
+		
+	}
+}
+// xxx STOP
 
 /**
  * Multicore
@@ -664,6 +714,11 @@ void setup()
 		1,
 		&TaskNeopixel,
 		0);
+
+	//xxx START
+	pinMode(inputSensorPIR, INPUT);	
+	ws2812fx.setBrightness(ledHighBrightness);
+	//xxx STOP
 }
 
 void loop()
@@ -672,4 +727,6 @@ void loop()
 	iotWebConf.doLoop();
 
 	statemachine();
+
+	checkPIRstate(); //xxx	
 }

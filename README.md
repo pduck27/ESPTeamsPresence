@@ -1,4 +1,4 @@
-# ESP32 Teams Presence Light
+# ESP32 Teams Presence Light * * * pduck27 modified wip version with PIR detection * * *
 
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
 ![](https://github.com/toblum/ESPTeamsPresence/workflows/BuildAndRelease/badge.svg)
@@ -8,6 +8,8 @@
 **A standalone Microsoft Teams presence light based on ESP32 and RGB neopixel LEDs.**
 
 This project allows you to build a standalone device that visualizes your presence status from Microsoft Teams with colored LEDs. It's really easy to build and quite cheap.
+
+*This version is modified to be used together with a PIR detector to decrease brightness as long nobody is there. Work is in progress, modified parts can be identified by searching for xxx-tag.*
 
 See this video for a short overview:  
 
