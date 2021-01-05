@@ -1,6 +1,7 @@
-// pduck27 Changes commented with xxx
-// TODO: Setup PIR Parameter in Web
+// pduck27-changes commented with xxx
+// TODO: Setup PIR Parameter in Web (Duration, Pin, Brightness etc.)
 // TODO: Code Cleaning
+// TODO: Documentation
 
 /**
  * ESPTeamsPresence -- A standalone Microsoft Teams presence light 
@@ -106,7 +107,7 @@ const char* rootCACertificateGraph = \
 // #define NUMLEDS 16  							// Number of LEDs on the strip (if not set via build flags)
 // #define DATAPIN 26							// GPIO pin used to drive the LED strip (20 == GPIO/D13) (if not set via build flags)
 // #define STATUS_PIN LED_BUILTIN				// User builtin LED for status (if not set via build flags)
-#define DEFAULT_POLLING_PRESENCE_INTERVAL "15" //xxx	// Default interval to poll for presence info (seconds)
+#define DEFAULT_POLLING_PRESENCE_INTERVAL "10" //xxx	// Default interval to poll for presence info (seconds)
 #define DEFAULT_ERROR_RETRY_INTERVAL 30			// Default interval to try again after errors
 #define TOKEN_REFRESH_TIMEOUT 60	 			// Number of seconds until expiration before token gets refreshed
 #define CONTEXT_FILE "/context.json"			// Filename of the context file
@@ -184,10 +185,10 @@ TaskHandle_t TaskNeopixel;
 
 
 //xxx START
-#define inputSensorPIR 14
+#define inputSensorPIR 12
 bool usePIR = true;
-int ledHighBrightness = 120;
-int ledLowBrightness = 1;
+int ledHighBrightness = 150;
+int ledLowBrightness = 10;
 int nextPIRCheck = 0;
 int motionDuration = 60000;
 int motionDurationEnd = 1000;
@@ -300,9 +301,7 @@ void startMDNS() {
 
 // Neopixel control
 void setAnimation(uint8_t segment, uint8_t mode = FX_MODE_STATIC, uint32_t color = RED, uint16_t speed = 3000, bool reverse = false) {
-	uint16_t startLed, endLed = 0;
-
-	detectedImportantActivity = (mode > 0); //xxx
+	uint16_t startLed, endLed = 0;	
 
 	// Support only one segment for the moment
 	if (segment == 0) {
@@ -315,6 +314,8 @@ void setAnimation(uint8_t segment, uint8_t mode = FX_MODE_STATIC, uint32_t color
 
 void setPresenceAnimation() {
 	// Activity: Available, Away, BeRightBack, Busy, DoNotDisturb, InACall, InAConferenceCall, Inactive, InAMeeting, Offline, OffWork, OutOfOffice, PresenceUnknown, Presenting, UrgentInterruptionsOnly
+
+	detectedImportantActivity = false; //xxx
 
 	if (activity.equals("Available")) {
 		setAnimation(0, FX_MODE_STATIC, GREEN);
@@ -330,12 +331,15 @@ void setPresenceAnimation() {
 	}
 	if (activity.equals("DoNotDisturb") || activity.equals("UrgentInterruptionsOnly")) {
 		setAnimation(0, FX_MODE_STATIC, PINK);
+		detectedImportantActivity = true; //xxx
 	}
 	if (activity.equals("InACall")) {
 		setAnimation(0, FX_MODE_BREATH, RED);
+		detectedImportantActivity = true; //xxx
 	}
 	if (activity.equals("InAConferenceCall")) {
 		setAnimation(0, FX_MODE_BREATH, RED, 9000);
+		detectedImportantActivity = true; //xxx
 	}
 	if (activity.equals("Inactive")) {
 		setAnimation(0, FX_MODE_BREATH, WHITE);
@@ -348,6 +352,7 @@ void setPresenceAnimation() {
 	}
 	if (activity.equals("Presenting")) {
 		setAnimation(0, FX_MODE_COLOR_WIPE, RED);
+		detectedImportantActivity = true; //xxx
 	}
 }
 
@@ -594,12 +599,12 @@ void checkPIRstate() {
 		}
 		
 		if (state == HIGH){			
-			Serial.printf("Motion detected, extend brightness for %f s.\n", double(motionDuration / 1000));								
+			Serial.printf("Motion detected, set high brightness for %f s.\n", double(motionDuration / 1000));								
 			ws2812fx.setBrightness(ledHighBrightness);									
 			motionDurationEnd = millis() + motionDuration;		
 			nextPIRCheck = millis() + 5000; // additional delay due to PIR delay (approx. 3 sec HIGH after motion)
 		} else if (millis() > motionDurationEnd){		
-			DBG_PRINTLN(F("Motion is absent, brightness drecreased."));
+			DBG_PRINTLN(F("Motion is absent, set low brightness."));
 			ws2812fx.setBrightness(ledLowBrightness);    			
 		}
 		
