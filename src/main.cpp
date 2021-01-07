@@ -189,8 +189,8 @@ bool usePIR = true;
 int ledHighBrightness = 120;
 int ledLowBrightness = 1;
 int nextPIRCheck = 0;
-bool motionDetected = true;
-int motionDuration = 20000;
+int motionDuration = 60000;
+int motionDurationEnd = 1000;
 bool detectedImportantActivity = true;
 //xxx STOP
 
@@ -582,29 +582,25 @@ void checkPIRstate() {
 		return;
 	}
 	
-	if (millis() > nextPIRCheck) {
+	if (millis() > nextPIRCheck) {		
 		long state = 0;
-
+		nextPIRCheck = millis() + 1000;
+		
 		if (detectedImportantActivity) {
 			state = HIGH;
-			DBG_PRINTLN(F("Motion detection skipped cause of important activity."));
+			DBG_PRINTLN(F("Motion detection forced because of important activity status."));
 		} else {
 			state = digitalRead(inputSensorPIR);
 		}
 		
-		if(state == HIGH && !(motionDetected)) {      
-			Serial.printf("New motion detected, increase brightness for %d s. \n", motionDuration);
-			ws2812fx.setBrightness(ledHighBrightness);
-			motionDetected = true;      
-			nextPIRCheck = millis() + motionDuration;
-		}
-		else if (state == LOW && motionDetected) {
+		if (state == HIGH){			
+			Serial.printf("Motion detected, extend brightness for %f s.\n", double(motionDuration / 1000));								
+			ws2812fx.setBrightness(ledHighBrightness);									
+			motionDurationEnd = millis() + motionDuration;		
+			nextPIRCheck = millis() + 5000; // additional delay due to PIR delay (approx. 3 sec HIGH after motion)
+		} else if (millis() > motionDurationEnd){		
 			DBG_PRINTLN(F("Motion is absent, brightness drecreased."));
-			ws2812fx.setBrightness(ledLowBrightness);    
-			motionDetected = false;			
-			nextPIRCheck = millis() + 1000;
-		}	else {
-			nextPIRCheck = millis() + 1000;
+			ws2812fx.setBrightness(ledLowBrightness);    			
 		}
 		
 	}
