@@ -166,6 +166,11 @@ void handleRoot() {
 	s += "<div class=\"nes-field mt-s\"><label for=\"name_field\">Tenant hostname / ID</label><input type=\"text\" id=\"name_field\" class=\"nes-input\" disabled value=\"" + String(paramTenantValue) +  "\"></div>";
 	s += "<div class=\"nes-field mt-s\"><label for=\"name_field\">Polling interval (sec)</label><input type=\"text\" id=\"name_field\" class=\"nes-input\" disabled value=\"" + String(paramPollIntervalValue) +  "\"></div>";
 	s += "<div class=\"nes-field mt-s\"><label for=\"name_field\">Number of LEDs</label><input type=\"text\" id=\"name_field\" class=\"nes-input\" disabled value=\"" + String(paramNumLedsValue) +  "\"></div>";
+	s += "<div class=\"nes-field mt-s\"><label for=\"name_field\">Default LED Brightness (1-255)</label><input type=\"text\" id=\"name_field\" class=\"nes-input\" disabled value=\"" + String(paramLedBrightnessDefaultValue) +  "\"></div>";
+	s += "<div class=\"nes-field mt-s\"><label for=\"name_field\">Absence LED Brightness (0-255)</label><input type=\"text\" id=\"name_field\" class=\"nes-input\" disabled value=\"" + String(paramLedBrightnessAbsenceValue) +  "\"></div>";
+	s += "<div class=\"nes-field mt-s\"><label for=\"name_field\">Use PIR (0 = inactive and 1 = active)</label><input type=\"checkbox\" id=\"name_field\" class=\"nes-input\" disabled value=\"" + String(paramUsePIRValue) +  "\"></div>";	
+	s += "<div class=\"nes-field mt-s\"><label for=\"name_field\">PIR Pin (1-255)</label><input type=\"text\" id=\"name_field\" class=\"nes-input\" disabled value=\"" + String(paramPIRPinValue) +  "\"></div>";	
+	s += "<div class=\"nes-field mt-s\"><label for=\"name_field\">PIR motion duration increasement (1-1000)</label><input type=\"text\" id=\"name_field\" class=\"nes-input\" disabled value=\"" + String(paramMotionIncValue) +  "\"></div>";	
 	s += "</section>";
 
 	s += "<section class=\"nes-container with-title mt\"><h3 class=\"title\">Memory usage</h3>";
@@ -189,7 +194,7 @@ void handleRoot() {
 
 	s += "<div class=\"mt\"><i class=\"nes-icon github\"></i> Find the <a href=\"https://github.com/toblum/ESPTeamsPresence\" target=\"_blank\">ESPTeamsPresence</a> project on GitHub.</i></div>";
 
-	s += "</body>\n</html>\n";
+	s += "</body>\n</html>\n";  // pduck27 - Added additional parameters in line 169 - 173
 
 	server.send(200, "text/html", s);
 }
@@ -203,7 +208,13 @@ void handleGetSettings() {
 	responseDoc["tenant"].set(paramTenantValue);
 	responseDoc["poll_interval"].set(paramPollIntervalValue);
 	responseDoc["num_leds"].set(paramNumLedsValue);
-
+	// pduck27 Start
+	responseDoc["led_def_brightness"].set(paramLedBrightnessDefaultValue);
+	responseDoc["led_abs_brightness"].set(paramLedBrightnessAbsenceValue);
+	responseDoc["use_pir"].set(paramUsePIRValue);
+	responseDoc["pir_pin"].set(paramPIRPinValue);
+	responseDoc["motion_inc"].set(paramMotionIncValue);
+	// pduck27 End
 	responseDoc["heap"].set(ESP.getFreeHeap());
 	responseDoc["min_heap"].set(ESP.getMinFreeHeap());
     responseDoc["sketch_size"].set(ESP.getSketchSize());
@@ -265,13 +276,62 @@ boolean formValidator() {
 		valid = false;
 	}
 
+	// pduck27 Start
+	// Default LED brightness
+	int l5 = server.arg(paramNumLeds.getId()).length();
+	if ((l5 < 1) || (l5 > 255))
+	{
+		paramNumLeds.errorMessage = "Please provide a valid for the LED default brightnesss (1-255)!";
+		valid = false;
+	}
+
+	// Absence LED brightness
+	int l6 = server.arg(paramNumLeds.getId()).length();
+	if ((l6 < 0) || (l6 > 255))
+	{
+		paramNumLeds.errorMessage = "Please provide a valid value for the LED absence brightnesss (0-255)!";
+		valid = false;
+	}
+	
+	// Use PIR
+	int l7 = server.arg(paramNumLeds.getId()).length();
+	if ((l7 < 0) || (l7 > 1) )
+	{
+		paramNumLeds.errorMessage = "Please provide a valid value for PIR mode (0 = inactive and 1 = active)";
+		valid = false;
+	}
+	
+	if (l7 == 1) {
+		
+		// PIR Pin
+		int l8 = server.arg(paramNumLeds.getId()).length();
+		if ((l8 < 1) || (l6 > 255) )
+		{
+			paramNumLeds.errorMessage = "Please provide a valid value for the PIR Pin (1 -255).";
+			valid = false;
+		}
+
+		// PIR motion duration
+		int l9 = server.arg(paramNumLeds.getId()).length();
+		if ((l9 < 1) || (l9 > 1000) )
+		{
+			paramNumLeds.errorMessage = "Please provide a valid value for the motion duration increasement (1 - 1000)!";
+			valid = false;
+		}
+	}
+	// pduck27 End
+
 	return valid;
 }
 
 // Config was saved
 void onConfigSaved() {
-	DBG_PRINTLN(F("Configuration was updated."));
-	ws2812fx.setLength(atoi(paramNumLedsValue));
+	// pduck27 Start - Force restart after config change
+	DBG_PRINTLN(F("Configuration was updated. Restart in 3 seconds"));  
+	delay(3000);
+	ESP.restart();
+	// ws2812fx.setLength(atoi(paramNumLedsValue));  
+	// pduck27 End
 }
 
 // Requests to /startDevicelogin

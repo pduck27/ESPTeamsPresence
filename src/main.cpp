@@ -1,7 +1,6 @@
-// pduck27-changes commented with xxx
-// TODO: Setup PIR Parameter in Web (Duration, Pin, Brightness etc.)
-// TODO: Code Cleaning
-// TODO: Documentation
+// My changes are commented with // pduck27
+// TODO: Additional configurable parameters.
+// TODO: Make "Use PIR" parameter a valid Checkbox in configuration page
 
 /**
  * ESPTeamsPresence -- A standalone Microsoft Teams presence light 
@@ -107,9 +106,13 @@ const char* rootCACertificateGraph = \
 // #define NUMLEDS 16  							// Number of LEDs on the strip (if not set via build flags)
 // #define DATAPIN 26							// GPIO pin used to drive the LED strip (20 == GPIO/D13) (if not set via build flags)
 // #define STATUS_PIN LED_BUILTIN				// User builtin LED for status (if not set via build flags)
-#define DEFAULT_POLLING_PRESENCE_INTERVAL "10" //xxx	// Default interval to poll for presence info (seconds)
-#define DEFAULT_ERROR_RETRY_INTERVAL 30			// Default interval to try again after errors
-#define TOKEN_REFRESH_TIMEOUT 60	 			// Number of seconds until expiration before token gets refreshed
+#define DEFAULT_POLLING_PRESENCE_INTERVAL "10"  // Default interval to poll for presence info (seconds) // pduck27 changed to 10
+#define DEFAULT_ERROR_RETRY_INTERVAL 30			// pduck27 - Default interval to try again after errors
+#define DEFAULT_LED_BRIGHTNESS "150" 			// pduck27 - Default LED brightness
+#define DEFAULT_LED_BRIGHTNESS_ABSENCE "10"  	// pduck27 - Default LED brightness, when absent
+#define DEFAULT_MOTION_INC "60"					// pduck27 - Time in secs added when motion is detected
+#define DEFAULT_PIR_PIN "12"					// Default Pin for PIR data  
+#define TOKEN_REFRESH_TIMEOUT 60	 			// Number of seconds until exPIRation before token gets refreshed
 #define CONTEXT_FILE "/context.json"			// Filename of the context file
 #define VERSION "0.14.0"						// Version of the software
 
@@ -131,6 +134,7 @@ IotWebConf iotWebConf(thingName, &dnsServer, &server, wifiInitialApPassword);
 // Add parameter
 #define STRING_LEN 64
 #define INTEGER_LEN 16
+#define BOOL_LEN 1
 char paramClientIdValue[STRING_LEN];
 char paramTenantValue[STRING_LEN];
 char paramPollIntervalValue[INTEGER_LEN];
@@ -138,9 +142,21 @@ char paramNumLedsValue[INTEGER_LEN];
 IotWebConfSeparator separator = IotWebConfSeparator();
 IotWebConfParameter paramClientId = IotWebConfParameter("Client-ID (Generic ID: 3837bbf0-30fb-47ad-bce8-f460ba9880c3)", "clientId", paramClientIdValue, STRING_LEN, "text", "e.g. 3837bbf0-30fb-47ad-bce8-f460ba9880c3", "3837bbf0-30fb-47ad-bce8-f460ba9880c3");
 IotWebConfParameter paramTenant = IotWebConfParameter("Tenant hostname / ID", "tenantId", paramTenantValue, STRING_LEN, "text", "e.g. contoso.onmicrosoft.com");
-IotWebConfParameter paramPollInterval = IotWebConfParameter("Presence polling interval (sec) (default: 30)", "pollInterval", paramPollIntervalValue, INTEGER_LEN, "number", "10..300", DEFAULT_POLLING_PRESENCE_INTERVAL, "min='10' max='300' step='5'");
+IotWebConfParameter paramPollInterval = IotWebConfParameter("Presence polling interval (sec) (default: 10)", "pollInterval", paramPollIntervalValue, INTEGER_LEN, "number", "10..300", DEFAULT_POLLING_PRESENCE_INTERVAL, "min='10' max='300' step='5'");  // pduck27 changed to 10 default
 IotWebConfParameter paramNumLeds = IotWebConfParameter("Number of LEDs (default: 16)", "numLeds", paramNumLedsValue, INTEGER_LEN, "number", "1..500", "16", "min='1' max='500' step='1'");
 byte lastIotWebConfState;
+// pduck27 - Start
+char paramLedBrightnessDefaultValue[INTEGER_LEN];
+char paramLedBrightnessAbsenceValue[INTEGER_LEN];
+char paramUsePIRValue[INTEGER_LEN];
+char paramPIRPinValue[INTEGER_LEN];
+char paramMotionIncValue[INTEGER_LEN];
+IotWebConfParameter paramLedBrightnessDefault = IotWebConfParameter("Default LED Brightness (default: 150 [1-255])", "ledBrightnessDefault", paramLedBrightnessDefaultValue, INTEGER_LEN, "number", "1..255", DEFAULT_LED_BRIGHTNESS, "min='1' max='255' step='1'");
+IotWebConfParameter paramLedBrightnessAbsence = IotWebConfParameter("Absence LED Brightness (default: 10 [0-255])", "ledBrightnessAbsence", paramLedBrightnessAbsenceValue, INTEGER_LEN, "number", "0..255", DEFAULT_LED_BRIGHTNESS_ABSENCE, "min='0' max='255' step='1'");
+IotWebConfParameter paramUsePIR = IotWebConfParameter("Use PIR (0 = inactive and 1 = active)", "usePIR", paramUsePIRValue, INTEGER_LEN, "number", "0..1", false, "min='0' max='1' step='1'");
+IotWebConfParameter paramPIRPin = IotWebConfParameter("PIR data Pin (default: 12 [1-255])", "PIRDataPin", paramPIRPinValue, INTEGER_LEN, "number", "1..255", DEFAULT_PIR_PIN, "min='1' max='255' step='1'");
+IotWebConfParameter paramMotionInc = IotWebConfParameter("PIR motion increasement duration (default: 60 secs [1-1000])", "motionDuration", paramMotionIncValue, INTEGER_LEN, "number", "1..1000", DEFAULT_MOTION_INC, "min='1' max='1000' step='1'");
+// pduck27 - End
 
 // HTTP client
 WiFiClientSecure client;
@@ -160,7 +176,7 @@ uint8_t interval = 5;
 String access_token = "";
 String refresh_token = "";
 String id_token = "";
-unsigned int expires = 0;
+unsigned int exPIRes = 0;
 
 String availability = "";
 String activity = "";
@@ -184,23 +200,23 @@ uint8_t retries = 0;
 TaskHandle_t TaskNeopixel; 
 
 
-//xxx START
-#define inputSensorPIR 12
-bool usePIR = true;
-int ledHighBrightness = 150;
-int ledLowBrightness = 10;
-int nextPIRCheck = 0;
-int motionDuration = 60000;
-int motionDurationEnd = 1000;
-bool detectedImportantActivity = true;
-//xxx STOP
+// pduck27 Start - PIR variables
+bool usePIR;							// Use PIR logic
+int ledDefaultBrightness;				// Brightness for default state (1-255)
+int ledAbsenceBrightness;				// Brightness for absent state (0-255)
+int inputPinPIRSensor; 					// Pin of PIR data line
+int nextPIRCheck;						// When next PIR check occurs (in general 1 sec)
+int activePIRmotionUntil;  		    	// Time until absent state (will be increased each time a motion ccours)
+int motionDurationInc;					// Increasement until absent state is reached in milli sec
+bool detectedImportantActivity = true;  // Hinders absent mode for specific states
+// pduck27 End
 
 /**
  * Helper
  */
 // Calculate token lifetime
 int getTokenLifetime() {
-	return (expires - millis()) / 1000;
+	return (exPIRes - millis()) / 1000;
 }
 
 // Save context information to file in SPIFFS
@@ -315,7 +331,7 @@ void setAnimation(uint8_t segment, uint8_t mode = FX_MODE_STATIC, uint32_t color
 void setPresenceAnimation() {
 	// Activity: Available, Away, BeRightBack, Busy, DoNotDisturb, InACall, InAConferenceCall, Inactive, InAMeeting, Offline, OffWork, OutOfOffice, PresenceUnknown, Presenting, UrgentInterruptionsOnly
 
-	detectedImportantActivity = false; //xxx
+	detectedImportantActivity = false;  // pduck27
 
 	if (activity.equals("Available")) {
 		setAnimation(0, FX_MODE_STATIC, GREEN);
@@ -331,15 +347,15 @@ void setPresenceAnimation() {
 	}
 	if (activity.equals("DoNotDisturb") || activity.equals("UrgentInterruptionsOnly")) {
 		setAnimation(0, FX_MODE_STATIC, PINK);
-		detectedImportantActivity = true; //xxx
+		detectedImportantActivity = true;  // pduck27
 	}
 	if (activity.equals("InACall")) {
 		setAnimation(0, FX_MODE_BREATH, RED);
-		detectedImportantActivity = true; //xxx
+		detectedImportantActivity = true;  // pduck27
 	}
 	if (activity.equals("InAConferenceCall")) {
 		setAnimation(0, FX_MODE_BREATH, RED, 9000);
-		detectedImportantActivity = true; //xxx
+		detectedImportantActivity = true;  // pduck27
 	}
 	if (activity.equals("Inactive")) {
 		setAnimation(0, FX_MODE_BREATH, WHITE);
@@ -352,7 +368,7 @@ void setPresenceAnimation() {
 	}
 	if (activity.equals("Presenting")) {
 		setAnimation(0, FX_MODE_COLOR_WIPE, RED);
-		detectedImportantActivity = true; //xxx
+		detectedImportantActivity = true;  // pduck27
 	}
 }
 
@@ -390,12 +406,12 @@ void pollForToken() {
 		}
 	} else {
 		if (responseDoc.containsKey("access_token") && responseDoc.containsKey("refresh_token") && responseDoc.containsKey("id_token")) {
-			// Save tokens and expiration
+			// Save tokens and exPIRation
 			access_token = responseDoc["access_token"].as<String>();
 			refresh_token = responseDoc["refresh_token"].as<String>();
 			id_token = responseDoc["id_token"].as<String>();
-			unsigned int _expires_in = responseDoc["expires_in"].as<unsigned int>();
-			expires = millis() + (_expires_in * 1000); // Calculate timestamp when token expires
+			unsigned int _exPIRes_in = responseDoc["exPIRes_in"].as<unsigned int>();
+			exPIRes = millis() + (_exPIRes_in * 1000); // Calculate timestamp when token exPIRes
 
 			// Set state
 			state = SMODEAUTHREADY;
@@ -447,7 +463,7 @@ boolean refreshToken() {
 	DynamicJsonDocument responseDoc(capacity);
 	boolean res = requestJsonApi(responseDoc, "https://login.microsoftonline.com/" + String(paramTenantValue) + "/oauth2/v2.0/token", payload, capacity);
 
-	// Replace tokens and expiration
+	// Replace tokens and exPIRation
 	if (res && responseDoc.containsKey("access_token") && responseDoc.containsKey("refresh_token")) {
 		if (!responseDoc["access_token"].isNull()) {
 			access_token = responseDoc["access_token"].as<String>();
@@ -460,9 +476,9 @@ boolean refreshToken() {
 		if (!responseDoc["id_token"].isNull()) {
 			id_token = responseDoc["id_token"].as<String>();
 		}
-		if (!responseDoc["expires_in"].isNull()) {
-			int _expires_in = responseDoc["expires_in"].as<unsigned int>();
-			expires = millis() + (_expires_in * 1000); // Calculate timestamp when token expires
+		if (!responseDoc["exPIRes_in"].isNull()) {
+			int _exPIRes_in = responseDoc["exPIRes_in"].as<unsigned int>();
+			exPIRes = millis() + (_exPIRes_in * 1000); // Calculate timestamp when token exPIRes
 		}
 
 		DBG_PRINTLN(F("refreshToken() - Success"));
@@ -581,7 +597,7 @@ void statemachine() {
 	}
 }
 
-// xxx START
+// pduck27 Start - PIR check function
 void checkPIRstate() {	
 	if (! usePIR){
 		return;
@@ -591,26 +607,28 @@ void checkPIRstate() {
 		long state = 0;
 		nextPIRCheck = millis() + 1000;
 		
+		// Check for force status
 		if (detectedImportantActivity) {
 			state = HIGH;
 			DBG_PRINTLN(F("Motion detection forced because of important activity status."));
 		} else {
-			state = digitalRead(inputSensorPIR);
+			state = digitalRead(inputPinPIRSensor);
 		}
 		
+		// If motion detected then increase time until absence mode. Else if absence time is over then decrease brightness.
 		if (state == HIGH){			
-			Serial.printf("Motion detected, set high brightness for %f s.\n", double(motionDuration / 1000));								
-			ws2812fx.setBrightness(ledHighBrightness);									
-			motionDurationEnd = millis() + motionDuration;		
-			nextPIRCheck = millis() + 5000; // additional delay due to PIR delay (approx. 3 sec HIGH after motion)
-		} else if (millis() > motionDurationEnd){		
-			DBG_PRINTLN(F("Motion is absent, set low brightness."));
-			ws2812fx.setBrightness(ledLowBrightness);    			
+			Serial.printf("Motion detected, set default brightness for %g s.\n", double(motionDurationInc / 1000));								
+			ws2812fx.setBrightness(ledDefaultBrightness);									
+			activePIRmotionUntil = millis() + motionDurationInc;		
+			nextPIRCheck = millis() + 5000; // Additional delay because PIR sends up to 3 secs HIGH state after motion detection
+		} else if (millis() > activePIRmotionUntil){		
+			DBG_PRINTLN(F("Motion is absent, set absence brightness."));
+			ws2812fx.setBrightness(ledAbsenceBrightness);    			
 		}
 		
 	}
 }
-// xxx STOP
+// pduck27 End
 
 /**
  * Multicore
@@ -657,6 +675,13 @@ void setup()
 	iotWebConf.addParameter(&paramTenant);
 	iotWebConf.addParameter(&paramPollInterval);
 	iotWebConf.addParameter(&paramNumLeds);
+	// pduck27 - Start
+	iotWebConf.addParameter(&paramLedBrightnessDefault);
+	iotWebConf.addParameter(&paramLedBrightnessAbsence);
+	iotWebConf.addParameter(&paramUsePIR);
+	iotWebConf.addParameter(&paramPIRPin);
+	iotWebConf.addParameter(&paramMotionInc);	
+	// pduck27 - End
 	// iotWebConf.setFormValidator(&formValidator);
 	// iotWebConf.getApTimeoutParameter()->visible = true;
 	// iotWebConf.getApTimeoutParameter()->defaultValue = "10";
@@ -716,10 +741,49 @@ void setup()
 		&TaskNeopixel,
 		0);
 
-	//xxx START
-	pinMode(inputSensorPIR, INPUT);	
-	ws2812fx.setBrightness(ledHighBrightness);
-	//xxx STOP
+	// pduck27 Start - PIR and brightness initialization		
+	usePIR = atoi(paramUsePIRValue);
+	if (usePIR) {
+		DBG_PRINTLN("PIR mode is active.");
+
+		// Set PIR Pin
+		if (atoi(paramPIRPinValue) < 1 ){
+			inputPinPIRSensor = atoi(DEFAULT_PIR_PIN);
+			DBG_PRINTLN("PIR Pin not configured well. Must be greater than 0. Use default value instead.");
+		} else {
+			inputPinPIRSensor = atoi(paramPIRPinValue);
+		}
+		pinMode(inputPinPIRSensor, INPUT);	
+		Serial.printf("PIR pin set to %d.\n", inputPinPIRSensor);
+
+		// Set PIR motion duration increasement
+		if ((atoi(paramMotionIncValue) < 1) || (atoi(paramMotionIncValue) > 1000)){
+			motionDurationInc = atoi(DEFAULT_MOTION_INC);
+			DBG_PRINTLN("PIR duration increasement not configured well. Must be between 1-1000. Use default value instead.");
+		} else {
+			motionDurationInc = atoi(paramMotionIncValue);
+		}
+		motionDurationInc *= 1000;
+		Serial.printf("PIR motion duration increasement set to %d s.\n", motionDurationInc);
+
+	} else{
+		DBG_PRINTLN("PIR mode is not active.");
+	}
+	
+	// Set brightness
+	if (atoi(paramLedBrightnessDefaultValue) < 1){
+		ledDefaultBrightness = atoi(DEFAULT_LED_BRIGHTNESS);
+		ledAbsenceBrightness = atoi(DEFAULT_LED_BRIGHTNESS_ABSENCE);
+		DBG_PRINTLN("Brightness is not configured well. Default must be greater than 0. Use defaults instead.");
+	} else {
+		ledDefaultBrightness = atoi(paramLedBrightnessDefaultValue);
+		ledAbsenceBrightness = atoi(paramLedBrightnessAbsenceValue);	
+	}
+	Serial.printf("Default brightness set to %d and absence brightness set to %d.\n", ledDefaultBrightness, ledAbsenceBrightness);
+
+	// Set default Brightness in general
+	ws2812fx.setBrightness(ledDefaultBrightness);
+	// pduck27 End
 }
 
 void loop()
@@ -728,6 +792,6 @@ void loop()
 	iotWebConf.doLoop();
 
 	statemachine();
-
-	checkPIRstate(); //xxx	
+	
+	checkPIRstate(); // pduck27 - PIR integration
 }

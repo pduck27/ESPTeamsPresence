@@ -1,49 +1,40 @@
-# ESP32 Teams Presence Light * * * pduck27 modified wip version with PIR detection * * *
-
+# ESP32 Teams Presence Light * * * pduck27 version * * *
 [![License: MPL 2.0](https://img.shields.io/badge/License-MPL%202.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
-![](https://github.com/toblum/ESPTeamsPresence/workflows/BuildAndRelease/badge.svg)
-![](https://img.shields.io/github/v/release/toblum/ESPTeamsPresence)
+![](https://github.com/pduck27/ESPTeamsPresence/workflows/BuildAndRelease/badge.svg)
+![](https://img.shields.io/github/v/release/pduck27/ESPTeamsPresence)
+
+This is an enhanced version of [toblum's original Teams Presence light](https://github.com/toblum/ESPTeamsPresence). Please visit his project page for more details on hard- and software.
+
+**The following enhancements were done right now:**
+- You can set a default brightness in the settings.
+- After changing the configuration the ESP restarts.
+- You can add an optional PIR sensor like HC-SC501 to decrease brightness if no motion is detected around the presence light.
+- Absence brightness and duration can be configured in the settings.
+- Important activities like "In a call" will override motion detection.
 
 
-**A standalone Microsoft Teams presence light based on ESP32 and RGB neopixel LEDs.**
-
-This project allows you to build a standalone device that visualizes your presence status from Microsoft Teams with colored LEDs. It's really easy to build and quite cheap.
-
-*This version is modified to be used together with a PIR detector to decrease brightness as long nobody is there. Work is in progress, modified parts can be identified by searching for xxx-tag.*
-
-See this video for a short overview:  
-
-[![OverView](https://img.youtube.com/vi/MHl5En8YuxQ/0.jpg)](https://www.youtube.com/watch?v=MHl5En8YuxQ)
-
-Some technical details:  
-This projects implements the device login flow to authenticate against Microsoft Azure AD and to get a access token. Using this token, the device can call the Microsoft Graph API to get presence information for the authenticated user. The token is automatically refreshed so that it can run standalone for some time.
-
-Everything is implemented in C code for Arduino-style microcontrollers and runs directly on the cheap and powerful WiFi-connected ESP32 board. [Getting the hardware](https://toblum.github.io/ESPTeamsPresence/#/buy) is usually no problem.
-
-[![Build and Setup](https://img.youtube.com/vi/DH3zN3nLk9w/0.jpg)](https://www.youtube.com/watch?v=DH3zN3nLk9w)
-
-The build and setup procedure is extremely easy and well documented. The device consists of only two active parts and three wires and is powered via Micro-USB. It also features a cool retro-style web UI for configuration.
-
-[![UI](https://img.youtube.com/vi/3qcatKaqbU4/0.jpg)](https://www.youtube.com/watch?v=3qcatKaqbU4)
+**If you connect a HC-S501 PIR please configure it like this:**
+- VCC and GND can be shared with the LED ring. Data line must be connected to another Pin (default 12).
+- Set the jumper to H mode "repeatable trigger", so it detects motion continiously. Should be default on most boards.
+- Time signal (wheel with T) -  Should be low/average because we control the time after a motion through the code. Too high settings occurs sometime in false states. There is also a fixed delay in the code after recognizing a "detected motion" due to some lock time from the board. Please let me know when you have other experiences. My one is set to the first quarter.
+- Sensitivity (wheel with S) - You can play with it, as you want.
 
 
-## Libraries used
-This project uses the following libraries from different authors:
-- [IotWebConf](https://github.com/prampec/IotWebConf) by prampec
-- [ArduinoJson](https://github.com/bblanchon/ArduinoJson) by bblanchon
-- [WS2812FX](https://github.com/kitesurfer1404/WS2812FX) by kitesurfer1404
-- [Docute](https://github.com/egoist/docute) by egoist
-- [NES.css](https://github.com/nostalgic-css/NES.css/) by nostalgic-css
 
-Thanks to all the authors.
+**I also designed a case for 3D printing based on toblum's base:**
+- The base can hold a ESP32 DevKitC v4 and a 12 LED ring
+- The cube has an optional embedded Teams logo
+- The cube has an optional PIR holder on the top.
 
+![Alt text](docs/pics/PIR_cube.jpg "My cube with Teams Logo and PIR on top")
 
-## Possible enhancements
-- [ ] Make color / animation configurable via web UI.
-- [ ] Make LED brightness configurable.
-- [ ] Make LED PIN configurable.
-- [ ] Allow manual setting of the status via UI / API.
+![Alt text](docs/pics/cube_holder.jpg "Base with holder for ESP32 DevKitC v4 and 12 LED ring")
+
+You can find the 3D models on [Thingiverse](https://www.thingiverse.com/thing:4712835).
 
 
+Modifications in the code are commented with *// pduck27*.
+
+Thanks a lot to *toblum* for this nice project! All credits go to him.
 ## Licence
-All code is licensed under the [MPLv2 License](https://github.com/toblum/ESPTeamsPresence/blob/master/LICENSE).
+All code is licensed under the [MPLv2 License](https://github.com/pduck27/ESPTeamsPresence/blob/master/LICENSE).
