@@ -58,14 +58,22 @@ boolean requestJsonApi(JsonDocument& doc, String url, String payload = "", size_
 			Serial.printf("[HTTPS] Method: %s, Response code: %d\n", type.c_str(), httpCode);
 
 			// Just for debugging purposes:
-			// if (url.indexOf("presence") > 0) {
-			// 	Serial.println(client->readString());
-			// }
+			//if (url.indexOf("presence") > 0) {
+			//  Serial.println(client->readString());
+			//}
 
 			// File found at server (HTTP 200, 301), or HTTP 400 with response payload
 			if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY || httpCode == HTTP_CODE_BAD_REQUEST) {
-				// Parse JSON data
-				DeserializationError error = deserializeJson(doc, *client);
+				// Parse JSON data	
+				
+				// pduck27 Start - Changed due to inputError for single quotes in payload 
+				// DeserializationError error = deserializeJson(doc, *client); // original code
+				String payload = https.getString(); 
+				payload.replace("'", ""); // Delete single quotes
+				// Serial.println(payload);  // Debug
+				DeserializationError error = deserializeJson(doc, payload); 
+				// pduck27 End
+
 				client->stop();
 				delete client;
 				client = NULL;
